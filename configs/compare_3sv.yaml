@@ -1,0 +1,96 @@
+seed: 0
+device: cuda
+
+carla:
+  host: 127.0.0.1
+  port: 2000
+  timeout: 10.0
+  town: Town04
+  synchronous_mode: true
+  fixed_delta_seconds: 0.1
+  no_rendering_mode: true
+  traffic_manager_port: 8000
+
+road:
+  lane_width: 3.5
+  num_lanes: 3
+
+route_bank:
+  seed: 0
+  train_routes: 100
+  eval_routes: 30
+  spawn_count_hint: 120
+
+experiment:
+  scenario: compare_3sv
+  sim_hz: 10
+  max_timesteps: 400000
+  episode_horizon: 200
+  eval_freq: 20000
+  eval_episodes: 20
+  save_freq: 20000
+  log_dir: runs/compare_3sv
+
+traffic:
+  compare_3sv:
+    surrounding_vehicles_min: 3
+    surrounding_vehicles_max: 3
+    sv_speed_min: 5.0
+    sv_speed_max: 12.0
+    av_target_speed_min: 12.0
+    av_target_speed_max: 14.0
+  lane_change_probability: 0.2
+  max_lane_changes_per_episode: 3
+  traffic_manager_reference_speed_kmh: 50.0
+  global_distance_to_leading_vehicle: 2.5
+
+observation:
+  history_steps: 10
+  max_surrounding_vehicles: 10
+  ego_dim: 8
+  sv_dim: 8
+  risk_dim: 4
+
+belief:
+  num_modes: 7
+  process_noise: 0.15
+  measurement_noise: 0.5
+  min_mode_probability: 0.001
+
+risk_field:
+  horizon_steps: 30
+  road_weight: 1.0
+  center_weight: 0.1
+  center_decay: 0.8
+  boundary_safety_margin: 0.4
+  lane_width: 3.5
+  vehicle_weight: 2.0
+  uncertainty_weight: 1.0
+  safe_distance: 5.0
+  vehicle_decay: 1.0
+  vehicle_length: 4.8
+  vehicle_width: 2.0
+
+reward:
+  progress_weight: 1.0
+  speed_weight: 0.2
+  risk_weight: 0.8
+  collision_penalty: 20.0
+  offroad_penalty: 10.0
+  action_smoothness_weight: 0.05
+
+td3:
+  start_timesteps: 10000
+  batch_size: 256
+  replay_buffer_size: 1000000
+  discount: 0.99
+  tau: 0.005
+  actor_lr: 0.0003
+  critic_lr: 0.0003
+  expl_noise: 0.1
+  policy_noise: 0.2
+  noise_clip: 0.5
+  policy_freq: 2
+  hidden_dim: 256
+  lstm_hidden_dim: 128
+  attention_dim: 128
