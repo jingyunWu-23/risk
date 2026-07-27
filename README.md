@@ -65,6 +65,12 @@ Quick data-flow test without CARLA:
 python scripts/train.py --config configs/default.yaml --dry-run
 ```
 
+SafeBench-inspired straight-road LC template smoke test:
+
+```bash
+python tests/scripts/train_lc_straight_templates.py --template-name straight_follow --episodes 2 --batch-size 1 --no-cuda
+```
+
 Evaluate:
 
 ```bash

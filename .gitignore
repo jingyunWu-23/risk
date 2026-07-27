@@ -4,6 +4,7 @@ __pycache__/
 *.pt
 *.pth
 runs/
+tests/results/
 *.egg-info/
 .env
 .venv/
