@@ -41,6 +41,12 @@ export CARLA_ROOT=/path/to/CARLA_0.9.15
 export PYTHONPATH=$CARLA_ROOT/PythonAPI/carla/dist/carla-0.9.15-py3.8-linux-x86_64.egg:$CARLA_ROOT/PythonAPI/carla:$PYTHONPATH
 ```
 
+Or install this project and its Python dependencies in editable mode:
+
+```bash
+bash scripts/setup_env.sh
+```
+
 Start CARLA:
 
 ```bash
