@@ -16,13 +16,22 @@ from rarl.utils.config import load_config
 from rarl.utils.seed import set_seed
 
 
+def resolve_project_path(path):
+    path = Path(path)
+    if path.is_absolute():
+        return path
+    return PROJECT_ROOT / path
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/default.yaml")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--log-dir", default=None, help="Override checkpoint/log directory.")
     args = parser.parse_args()
 
-    cfg = load_config(args.config)
+    config_path = resolve_project_path(args.config)
+    cfg = load_config(config_path)
     set_seed(cfg["seed"])
 
     env = CarlaRiskAwareEnv(cfg, dry_run=args.dry_run)
@@ -35,7 +44,7 @@ def main():
     episode_reward = 0.0
     episode_num = 0
     episode_step = 0
-    log_dir = Path(cfg["experiment"]["log_dir"])
+    log_dir = resolve_project_path(args.log_dir or cfg["experiment"]["log_dir"])
     log_dir.mkdir(parents=True, exist_ok=True)
 
     max_timesteps = int(cfg["experiment"]["max_timesteps"])

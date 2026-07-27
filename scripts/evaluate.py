@@ -14,6 +14,13 @@ from rarl.utils.config import load_config
 from rarl.utils.seed import set_seed
 
 
+def resolve_project_path(path):
+    path = Path(path)
+    if path.is_absolute():
+        return path
+    return PROJECT_ROOT / path
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/default.yaml")
@@ -21,11 +28,13 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    cfg = load_config(args.config)
+    config_path = resolve_project_path(args.config)
+    checkpoint_path = resolve_project_path(args.checkpoint)
+    cfg = load_config(config_path)
     set_seed(cfg["seed"])
     env = CarlaRiskAwareEnv(cfg, dry_run=args.dry_run, split="eval")
     agent = TD3Agent(env.observation_dim, env.action_dim, max_action=1.0, cfg=cfg, device=cfg["device"])
-    agent.load(args.checkpoint)
+    agent.load(checkpoint_path)
 
     rewards = []
     collisions = []
