@@ -26,6 +26,8 @@ class CarlaRiskAwareEnv:
         self.prev_action = np.zeros(2, dtype=np.float32)
         self.prev_speed = 0.0
         self.prev_progress = 0.0
+        self.route_progress = 0.0
+        self.prev_location = None
         self.target_speed = 13.0
         self.route_length = 200.0
         self.route_scenario = None
@@ -90,6 +92,8 @@ class CarlaRiskAwareEnv:
         self.episode_step = 0
         self.prev_action[:] = 0.0
         self.prev_progress = 0.0
+        self.route_progress = 0.0
+        self.prev_location = None
         self.prev_speed = 0.0
         self.collision_events = []
         self.metrics.reset()
@@ -111,7 +115,8 @@ class CarlaRiskAwareEnv:
             self.route_length = self._estimate_route_length()
             self._tick_world()
             self.prev_speed = self._read_ego_state()[5]
-            self.prev_progress = self._route_progress()
+            self.prev_location = self.ego_vehicle.get_location()
+            self.prev_progress = 0.0
             self.belief.update(self._read_surrounding_vehicle_observations())
         return self._build_observation()
 
@@ -125,6 +130,7 @@ class CarlaRiskAwareEnv:
         else:
             self._apply_ego_action(action)
             self._tick_world()
+            self._update_route_progress()
             self.belief.predict(self.dt)
             self.belief.update(self._read_surrounding_vehicle_observations())
 
@@ -164,6 +170,7 @@ class CarlaRiskAwareEnv:
         sv_count = min(max(1, sv_count), self.max_svs)
         self.target_speed = float(rng.uniform(scenario_cfg["av_target_speed_min"], scenario_cfg["av_target_speed_max"]))
         self.route_length = 200.0
+        self.route_progress = 0.0
         self._mock_ego = np.array([0.0, 0.0, 0.0, self.target_speed, 0.0, self.target_speed, 0.0, 0.0], dtype=np.float32)
         self._mock_svs = {}
         for i in range(sv_count):
@@ -186,6 +193,7 @@ class CarlaRiskAwareEnv:
         self._mock_ego[4] = self._mock_ego[5] * np.sin(self._mock_ego[2])
         self._mock_ego[0] += self._mock_ego[3] * self.dt
         self._mock_ego[1] += self._mock_ego[4] * self.dt
+        self.route_progress = max(0.0, float(self._mock_ego[0]))
         for state in self._mock_svs.values():
             state[0] += state[2] * self.dt
             state[1] += state[3] * self.dt
@@ -383,11 +391,20 @@ class CarlaRiskAwareEnv:
 
     def _route_progress(self):
         if self.dry_run:
-            return float(self._mock_ego[0])
-        ego_loc = self.ego_vehicle.get_location()
-        origin = self._route_origin()
-        route_x = self._to_ego_frame(self._route_origin_transform(), self._sub_vector(ego_loc, origin))[0]
-        return float(route_x)
+            return max(0.0, float(self._mock_ego[0]))
+        return float(self.route_progress)
+
+    def _update_route_progress(self):
+        current_location = self.ego_vehicle.get_location()
+        if self.prev_location is None:
+            self.prev_location = current_location
+            return
+        delta = self._sub_vector(current_location, self.prev_location)
+        transform = self.ego_vehicle.get_transform()
+        yaw = math.radians(transform.rotation.yaw)
+        forward_progress = delta.x * math.cos(yaw) + delta.y * math.sin(yaw)
+        self.route_progress += max(0.0, float(forward_progress))
+        self.prev_location = current_location
 
     def _route_completion(self):
         progress = max(0.0, self._route_progress())
