@@ -156,6 +156,7 @@ class CarlaRiskAwareEnv:
             "episode_step": self.episode_step,
             "episode_length": self.episode_step,
             "route_completion": route_completion,
+            "sv_count": len(self._read_surrounding_vehicle_observations()),
             "min_distance": min_distance,
             "min_ttc": min_ttc,
             **risk,
@@ -359,7 +360,7 @@ class CarlaRiskAwareEnv:
         observations = self._read_surrounding_vehicle_observations()
         sv_modes = [self.belief.get_vehicle_modes(vehicle_id) for vehicle_id in sorted(observations.keys())]
         return self.risk_field.total_risk(
-            ego[:2],
+            np.zeros(2, dtype=np.float32),
             lane_offset=ego[1],
             lane_width=self.road_width,
             sv_modes=sv_modes,

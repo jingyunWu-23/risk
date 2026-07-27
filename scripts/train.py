@@ -70,7 +70,8 @@ def main():
                 f"step={t + 1} episode={episode_num} episode_step={episode_step} "
                 f"reward={episode_reward:.3f} collision={info['collision']} "
                 f"offroad={info['offroad']} route_completion={info['route_completion']:.3f} "
-                f"risk={info['total_risk']:.3f}"
+                f"risk={info['total_risk']:.3f} road_risk={info['road_risk']:.3f} "
+                f"vehicle_risk={info['vehicle_risk']:.3f} sv_count={info['sv_count']}"
             )
             obs = env.reset(seed=cfg["seed"] + episode_num + 1)
             episode_reward = 0.0
