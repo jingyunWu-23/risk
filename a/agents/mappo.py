@@ -39,7 +39,26 @@ MARL_DIR = _resolve_marl_dir()
 if str(MARL_DIR) not in sys.path:
     sys.path.insert(0, str(MARL_DIR))
 
-from single_agent.Model_common import ActorNetwork  # noqa: E402
+try:
+    from single_agent.Model_common import ActorNetwork  # noqa: E402
+except ImportError:
+    class ActorNetwork(nn.Module):
+        """Fallback actor matching the MARL1 three-layer MLP interface."""
+
+        def __init__(self, input_dim: int, hidden_dim: int, output_dim: int, output_activation=None):
+            super().__init__()
+            self.fc1 = nn.Linear(int(input_dim), int(hidden_dim))
+            self.fc2 = nn.Linear(int(hidden_dim), int(hidden_dim))
+            self.fc3 = nn.Linear(int(hidden_dim), int(output_dim))
+            self.output_activation = output_activation
+
+        def forward(self, state):
+            x = nn.functional.relu(self.fc1(state))
+            x = nn.functional.relu(self.fc2(x))
+            x = self.fc3(x)
+            if self.output_activation is not None:
+                x = self.output_activation(x, dim=-1)
+            return x
 
 
 class CentralizedCritic(nn.Module):
