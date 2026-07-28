@@ -111,6 +111,11 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=669)
     parser.add_argument("--torch-seed", type=int, default=669)
     parser.add_argument("--no-cuda", action="store_true", default=False)
+    parser.add_argument(
+        "--rarl-config",
+        default=str(MODEL_ROOT.parent / "configs" / "compare_3sv.yaml"),
+        help="Config used when evaluating RARL TD3 checkpoints named checkpoint_N.pt or latest.pt.",
+    )
     parser.add_argument("--carla-rpc-timeout", type=float, default=180.0)
     parser.add_argument("--purge-existing-actors-on-reset", action="store_true", default=False)
     parser.add_argument("--cleanup-destroy-mode", choices=["sequential", "batch"], default="sequential")
@@ -122,8 +127,21 @@ def parse_args():
 
 
 def checkpoint_step(path: Path) -> int:
-    match = re.search(r"checkpoint-(\d+)\.pt$", str(path))
-    return int(match.group(1)) if match else -1
+    match = re.search(r"checkpoint[-_](\d+)\.pt$", str(path))
+    if match:
+        return int(match.group(1))
+    if path.name == "latest.pt":
+        sibling_steps = [
+            checkpoint_step(item)
+            for item in path.parent.glob("checkpoint*.pt")
+            if item.name != "latest.pt" and re.search(r"checkpoint[-_]\d+\.pt$", str(item))
+        ]
+        return max(sibling_steps, default=0)
+    return -1
+
+
+def is_rarl_td3_checkpoint_name(path: Path) -> bool:
+    return path.name == "latest.pt" or re.fullmatch(r"checkpoint_\d+\.pt", path.name) is not None
 
 
 def label_for_checkpoint(path: Path, suffix: str = "") -> str:
@@ -133,10 +151,18 @@ def label_for_checkpoint(path: Path, suffix: str = "") -> str:
 
 
 def select_interval_checkpoints(model_dir: Path, interval: int, include_final: bool) -> List[Path]:
-    checkpoints = sorted(model_dir.glob("checkpoint-*.pt"), key=checkpoint_step)
+    checkpoints = sorted(
+        [
+            path
+            for pattern in ("checkpoint-*.pt", "checkpoint_*.pt")
+            for path in model_dir.glob(pattern)
+            if checkpoint_step(path) > 0
+        ],
+        key=checkpoint_step,
+    )
     checkpoints = [path for path in checkpoints if checkpoint_step(path) > 0]
     if not checkpoints:
-        raise FileNotFoundError(f"No checkpoint-*.pt found under {model_dir}")
+        raise FileNotFoundError(f"No checkpoint-*.pt or checkpoint_*.pt found under {model_dir}")
     selected = []
     last_step: Optional[int] = None
     for path in checkpoints:
@@ -168,14 +194,28 @@ def resolve_ego_checkpoints(args) -> List[Tuple[str, Path, str]]:
     return result
 
 
-def load_ego_policy(path: Path, env, no_cuda: bool, seed: int, EgoPPOAdapter):
+def load_ego_policy(path: Path, env, no_cuda: bool, seed: int, rarl_config: str):
     if str(path).endswith(".zip"):
         from a.tests.envs.sb3_ego_adapter import SB3ContinuousEgoAsDiscretePolicy
 
         return SB3ContinuousEgoAsDiscretePolicy(path)
+    if is_rarl_td3_checkpoint_name(path):
+        from a.agents.rarl_td3_adapter import RARLTD3DiscreteAdapter
+
+        return RARLTD3DiscreteAdapter(path, config_path=rarl_config, no_cuda=bool(no_cuda))
+    from a.agents.ego_ppo import EgoPPOAdapter
+
     ego = EgoPPOAdapter.from_config({"use_cuda": not bool(no_cuda), "seed": int(seed)}, env.n_s, env.n_a)
     ego.load(str(path))
     return ego
+
+
+def runtime_imports():
+    from a.agents.mappo import MAPPOAgent
+    from a.envs.factory import make_env
+    from a.training import eval_runtime as train_mod
+
+    return train_mod, MAPPOAgent, make_env
 
 
 def parse_int_set(value: str) -> Optional[set]:
@@ -564,7 +604,7 @@ def main():
         print(pd.DataFrame(cases).groupby(["scenario_id", "route_id"]).size().reset_index(name="init_count").to_string(index=False))
         return
 
-    train_mod, MAPPOAgent, EgoPPOAdapter, make_env = finetune.runtime_imports()
+    train_mod, MAPPOAgent, make_env = runtime_imports()
     adv_ckpt = finetune.AdvCheckpoint(step=adv_step, model_dir=str(adv_model_dir))
     all_rows = []
     case_rows = []
@@ -585,7 +625,7 @@ def main():
             else:
                 mappo = None
             for model_label, ego_checkpoint, model_group in ego_items:
-                ego = load_ego_policy(ego_checkpoint, env, args.no_cuda, args.torch_seed, EgoPPOAdapter)
+                ego = load_ego_policy(ego_checkpoint, env, args.no_cuda, args.torch_seed, args.rarl_config)
                 metrics = finetune.run_eval_episode(env, mappo, ego, train_mod, ea, case_seed)
                 row = episode_row(model_label, model_group, ego_checkpoint, case, spec, metrics, train_mod)
                 all_rows.append(row)
