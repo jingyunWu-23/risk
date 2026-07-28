@@ -28,7 +28,7 @@ from a.scripts import finetune_ego_enhanced_poet as finetune
 
 DEFAULT_TRAINING_EGO = MODEL_ROOT / "results" / "joint_Jul_01_14_59_59" / "models" / "ego" / "checkpoint-62710.pt"
 DEFAULT_FINETUNE_DIR = MODEL_ROOT / "results" / "ego_enhanced_poet_finetune" / "poet_finetune_Jul_21_13_29_28-30-10" / "models" / "ego"
-DEFAULT_SCENARIO_TYPE_JSON = Path("/home/chenyuanwan/download/SafeBench-main/safebench/scenario/config/scenario_type/adv_init_state.json")
+DEFAULT_SCENARIO_TYPE_JSON = PACKAGE_PARENT / "tests" / "configs" / "adv_init_state.json"
 DEFAULT_CONFIG = MODEL_ROOT / "configs" / "carla_0913.yaml"
 DEFAULT_ADV_MODEL_DIR = MODEL_ROOT / "results" / "joint_Jul_01_14_59_59" / "models" / "adv"
 
