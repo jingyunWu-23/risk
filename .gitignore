@@ -3,8 +3,14 @@ __pycache__/
 *.py[cod]
 *.pt
 *.pth
+!a/results/joint_Jul_01_14_59_59/models/adv/actor_*.pt
+!a/results/joint_Jul_01_14_59_59/models/adv/critic_*.pt
 runs/
 tests/results/
+a/results/ego_adv_frozen_eval/
+a/results/ego_natural_seed_eval/
+a/results/ego_enhanced_poet_finetune/
+a/results/**/videos/
 *.egg-info/
 .env
 .venv/

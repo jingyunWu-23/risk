@@ -71,6 +71,14 @@ SafeBench-inspired straight-road LC template smoke test:
 python tests/scripts/train_lc_straight_templates.py --template-name straight_follow --episodes 2 --batch-size 1 --no-cuda
 ```
 
+Natural-traffic and frozen-adversary evaluation templates migrated from
+`carla_evolution` live under `a/`. The two primary entry points are:
+
+```bash
+python a/scripts/run_ego_natural_seed_eval.py --backend mock --ego-checkpoint /path/to/checkpoint.pt
+python a/scripts/evaluate_finetuned_ego_against_adv.py --backend mock --ego-checkpoint /path/to/checkpoint.pt
+```
+
 Evaluate:
 
 ```bash

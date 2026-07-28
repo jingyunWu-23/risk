@@ -21,7 +21,7 @@ setup(
     description="Risk-aware reinforcement learning scaffold for CARLA motion planning.",
     long_description=(ROOT / "README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
-    packages=find_packages(include=["rarl", "rarl.*", "tests", "tests.*"]),
+    packages=find_packages(include=["rarl", "rarl.*", "tests", "tests.*", "a", "a.*"]),
     python_requires=">=3.8,<3.9",
     install_requires=read_requirements(),
 )
