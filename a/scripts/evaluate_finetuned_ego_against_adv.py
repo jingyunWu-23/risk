@@ -89,6 +89,11 @@ def parse_args():
     parser.add_argument("--front-slow-gap", type=float, default=35.0)
     parser.add_argument("--torch-seed", type=int, default=669)
     parser.add_argument("--no-cuda", action="store_true", default=False)
+    parser.add_argument(
+        "--rarl-config",
+        default=str(MODEL_ROOT.parent / "configs" / "compare_3sv.yaml"),
+        help="Config used when evaluating RARL TD3 checkpoints named checkpoint_N.pt or latest.pt.",
+    )
     parser.add_argument("--carla-rpc-timeout", type=float, default=180.0)
     parser.add_argument("--purge-existing-actors-on-reset", action="store_true", default=False)
     parser.add_argument("--cleanup-destroy-mode", choices=["sequential", "batch"], default="sequential")
@@ -227,6 +232,20 @@ def make_output_dir(args):
         output_dir = Path(args.base_dir) / f"ego_adv_eval_{stamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
+
+
+def is_rarl_td3_checkpoint_name(path: Path) -> bool:
+    return path.name == "latest.pt" or re.fullmatch(r"checkpoint_\d+\.pt", path.name) is not None
+
+
+def load_ego_policy(checkpoint: Path, args, env, EgoPPOAdapter):
+    if is_rarl_td3_checkpoint_name(checkpoint):
+        from a.agents.rarl_td3_adapter import RARLTD3DiscreteAdapter
+
+        return RARLTD3DiscreteAdapter(checkpoint, config_path=args.rarl_config, no_cuda=bool(args.no_cuda))
+    ego = EgoPPOAdapter.from_config({"use_cuda": not args.no_cuda, "seed": args.torch_seed}, env.n_s, env.n_a)
+    ego.load(str(checkpoint))
+    return ego
 
 
 def write_csv(path, rows, mode="w"):
@@ -486,8 +505,7 @@ def main():
                 mappo.load(adv_ckpt.model_dir, adv_ckpt.step, train_mode=False)
             else:
                 mappo = None
-            ego = EgoPPOAdapter.from_config({"use_cuda": not args.no_cuda, "seed": args.torch_seed}, env.n_s, env.n_a)
-            ego.load(str(ego_checkpoint))
+            ego = load_ego_policy(ego_checkpoint, args, env, EgoPPOAdapter)
             for seed in seeds:
                 metrics = finetune.run_eval_episode(env, mappo, ego, train_mod, env_args, int(seed))
                 row = episode_row(ego_checkpoint, adv_step, adv_model_dir, int(seed), metrics, train_mod)

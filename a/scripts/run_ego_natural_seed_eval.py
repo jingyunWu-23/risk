@@ -137,6 +137,11 @@ def parse_args():
     parser.add_argument("--carla-rpc-timeout", type=float, default=300.0)
     parser.add_argument("--torch-seed", type=int, default=669)
     parser.add_argument("--no-cuda", action="store_true", default=False)
+    parser.add_argument(
+        "--rarl-config",
+        default=str(MODEL_ROOT.parent / "configs" / "compare_3sv.yaml"),
+        help="Config used when evaluating RARL TD3 checkpoints named checkpoint_N.pt or latest.pt.",
+    )
     parser.add_argument("--purge-existing-actors-on-reset", action="store_true", default=False)
     parser.add_argument("--cleanup-destroy-mode", choices=["sequential", "batch"], default="sequential")
     parser.add_argument("--render", action="store_true", default=False)
@@ -147,10 +152,21 @@ def parse_args():
 
 
 def checkpoint_step(path: Path) -> int:
-    match = re.fullmatch(r"checkpoint-(\d+)\.pt", path.name)
+    match = re.fullmatch(r"checkpoint[-_](\d+)\.pt", path.name)
+    if not match and path.name == "latest.pt":
+        sibling_steps = [
+            checkpoint_step(item)
+            for item in path.parent.glob("checkpoint*.pt")
+            if item.name != "latest.pt" and re.fullmatch(r"checkpoint[-_]\d+\.pt", item.name)
+        ]
+        return max(sibling_steps, default=0)
     if not match:
         raise ValueError(path.name)
     return int(match.group(1))
+
+
+def is_rarl_td3_checkpoint_name(path: Path) -> bool:
+    return path.name == "latest.pt" or re.fullmatch(r"checkpoint_\d+\.pt", path.name) is not None
 
 
 def checkpoint_source(path: Path) -> str:
@@ -174,9 +190,17 @@ def checkpoint_label(path: Path, label_with_source: bool = False) -> str:
 
 
 def select_checkpoints(ego_dir: Path, interval: int, include_final: bool):
-    checkpoints = sorted(ego_dir.glob("checkpoint-*.pt"), key=checkpoint_step)
+    checkpoints = sorted(
+        [
+            path
+            for pattern in ("checkpoint-*.pt", "checkpoint_*.pt")
+            for path in ego_dir.glob(pattern)
+            if re.fullmatch(r"checkpoint[-_]\d+\.pt", path.name)
+        ],
+        key=checkpoint_step,
+    )
     if not checkpoints:
-        raise FileNotFoundError(f"No checkpoint-*.pt found under {ego_dir}")
+        raise FileNotFoundError(f"No checkpoint-*.pt or checkpoint_*.pt found under {ego_dir}")
     selected = []
     last_step = None
     for checkpoint in checkpoints:
@@ -190,7 +214,12 @@ def select_checkpoints(ego_dir: Path, interval: int, include_final: bool):
 
 
 def select_all_checkpoints(args):
-    selected = select_checkpoints(Path(args.ego_dir), int(args.checkpoint_interval), bool(args.include_final))
+    selected = []
+    try:
+        selected = select_checkpoints(Path(args.ego_dir), int(args.checkpoint_interval), bool(args.include_final))
+    except FileNotFoundError:
+        if not args.ego_checkpoint:
+            raise
     seen = {str(path.resolve()) for path in selected}
     for item in args.ego_checkpoint or []:
         checkpoint = Path(item)
@@ -201,6 +230,16 @@ def select_all_checkpoints(args):
             selected.append(checkpoint)
             seen.add(resolved)
     return sorted(selected, key=checkpoint_step)
+
+
+def load_ego_policy(checkpoint: Path, args, env, EgoPPOAdapter):
+    if is_rarl_td3_checkpoint_name(checkpoint):
+        from a.agents.rarl_td3_adapter import RARLTD3DiscreteAdapter
+
+        return RARLTD3DiscreteAdapter(checkpoint, config_path=args.rarl_config, no_cuda=bool(args.no_cuda))
+    ego = EgoPPOAdapter.from_config({"use_cuda": not args.no_cuda, "seed": args.torch_seed}, env.n_s, env.n_a)
+    ego.load(str(checkpoint))
+    return ego
 
 
 def parse_seed_list(value: str):
@@ -680,8 +719,7 @@ def main():
                     if rows_for_model:
                         summary_rows.append(summarize_model_rows(rows_for_model))
                     continue
-            ego = EgoPPOAdapter.from_config({"use_cuda": not args.no_cuda, "seed": args.torch_seed}, env.n_s, env.n_a)
-            ego.load(str(checkpoint))
+            ego = load_ego_policy(checkpoint, args, env, EgoPPOAdapter)
             rows_for_model = []
             for seed in seeds:
                 metrics = finetune.run_eval_episode(env, None, ego, train_mod, env_args, int(seed))

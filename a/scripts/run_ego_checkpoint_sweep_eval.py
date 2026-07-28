@@ -72,6 +72,11 @@ def parse_args():
     parser.add_argument("--carla-rpc-timeout", type=float, default=300.0)
     parser.add_argument("--cuda-visible-devices", default=None, help="Optional CUDA_VISIBLE_DEVICES value for child eval commands.")
     parser.add_argument("--no-cuda", action="store_true", default=False)
+    parser.add_argument(
+        "--rarl-config",
+        default=str(MODEL_ROOT.parent / "configs" / "compare_3sv.yaml"),
+        help="Config forwarded when evaluating RARL TD3 checkpoints named checkpoint_N.pt or latest.pt.",
+    )
     parser.add_argument("--purge-existing-actors-on-reset", action="store_true", default=False)
     parser.add_argument("--cleanup-destroy-mode", choices=["sequential", "batch"], default="sequential")
     parser.add_argument("--skip-existing", action="store_true", default=True)
@@ -82,7 +87,14 @@ def parse_args():
 
 
 def checkpoint_step(path: Path) -> int:
-    match = re.fullmatch(r"checkpoint-(\d+)\.pt", path.name)
+    match = re.fullmatch(r"checkpoint[-_](\d+)\.pt", path.name)
+    if not match and path.name == "latest.pt":
+        sibling_steps = [
+            checkpoint_step(item)
+            for item in path.parent.glob("checkpoint*.pt")
+            if item.name != "latest.pt" and re.fullmatch(r"checkpoint[-_]\d+\.pt", item.name)
+        ]
+        return max(sibling_steps, default=0)
     if not match:
         raise ValueError(path.name)
     return int(match.group(1))
@@ -109,9 +121,17 @@ def checkpoint_label(path: Path, label_with_source: bool = False) -> str:
 
 
 def select_checkpoints(ego_dir: Path, interval: int, include_final: bool):
-    checkpoints = sorted(ego_dir.glob("checkpoint-*.pt"), key=checkpoint_step)
+    checkpoints = sorted(
+        [
+            path
+            for pattern in ("checkpoint-*.pt", "checkpoint_*.pt")
+            for path in ego_dir.glob(pattern)
+            if re.fullmatch(r"checkpoint[-_]\d+\.pt", path.name)
+        ],
+        key=checkpoint_step,
+    )
     if not checkpoints:
-        raise FileNotFoundError(f"No checkpoint-*.pt found under {ego_dir}")
+        raise FileNotFoundError(f"No checkpoint-*.pt or checkpoint_*.pt found under {ego_dir}")
     selected = []
     last_step = None
     for checkpoint in checkpoints:
@@ -125,7 +145,12 @@ def select_checkpoints(ego_dir: Path, interval: int, include_final: bool):
 
 
 def select_all_checkpoints(args):
-    selected = select_checkpoints(Path(args.ego_dir), int(args.checkpoint_interval), bool(args.include_final))
+    selected = []
+    try:
+        selected = select_checkpoints(Path(args.ego_dir), int(args.checkpoint_interval), bool(args.include_final))
+    except FileNotFoundError:
+        if not args.ego_checkpoint:
+            raise
     seen = {str(path.resolve()) for path in selected}
     for item in args.ego_checkpoint or []:
         checkpoint = Path(item)
@@ -218,6 +243,8 @@ def eval_one(args, checkpoint: Path, run_dir: Path):
         str(args.carla_rpc_timeout),
         "--cleanup-destroy-mode",
         str(args.cleanup_destroy_mode),
+        "--rarl-config",
+        str(args.rarl_config),
         "--output-dir",
         str(run_dir),
     ]
