@@ -238,14 +238,24 @@ def is_rarl_td3_checkpoint_name(path: Path) -> bool:
     return path.name == "latest.pt" or re.fullmatch(r"checkpoint_\d+\.pt", path.name) is not None
 
 
-def load_ego_policy(checkpoint: Path, args, env, EgoPPOAdapter):
+def load_ego_policy(checkpoint: Path, args, env):
     if is_rarl_td3_checkpoint_name(checkpoint):
         from a.agents.rarl_td3_adapter import RARLTD3DiscreteAdapter
 
         return RARLTD3DiscreteAdapter(checkpoint, config_path=args.rarl_config, no_cuda=bool(args.no_cuda))
+    from a.agents.ego_ppo import EgoPPOAdapter
+
     ego = EgoPPOAdapter.from_config({"use_cuda": not args.no_cuda, "seed": args.torch_seed}, env.n_s, env.n_a)
     ego.load(str(checkpoint))
     return ego
+
+
+def runtime_imports():
+    from a.agents.mappo import MAPPOAgent
+    from a.envs.factory import make_env
+    from a.training import eval_runtime as train_mod
+
+    return train_mod, MAPPOAgent, make_env
 
 
 def write_csv(path, rows, mode="w"):
@@ -418,7 +428,7 @@ def summarize_adv_rows(rows):
 def main():
     args = parse_args()
     env_args = env_args_for_finetune(args)
-    train_mod, MAPPOAgent, EgoPPOAdapter, make_env = finetune.runtime_imports()
+    train_mod, MAPPOAgent, make_env = runtime_imports()
 
     ego_search_dirs = [Path(item) for item in (args.ego_search_dir or [DEFAULT_RESULTS])]
     ego_checkpoint = Path(args.ego_checkpoint) if args.ego_checkpoint else finetune.latest_ego_checkpoint(ego_search_dirs)
@@ -505,7 +515,7 @@ def main():
                 mappo.load(adv_ckpt.model_dir, adv_ckpt.step, train_mode=False)
             else:
                 mappo = None
-            ego = load_ego_policy(ego_checkpoint, args, env, EgoPPOAdapter)
+            ego = load_ego_policy(ego_checkpoint, args, env)
             for seed in seeds:
                 metrics = finetune.run_eval_episode(env, mappo, ego, train_mod, env_args, int(seed))
                 row = episode_row(ego_checkpoint, adv_step, adv_model_dir, int(seed), metrics, train_mod)

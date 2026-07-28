@@ -232,14 +232,23 @@ def select_all_checkpoints(args):
     return sorted(selected, key=checkpoint_step)
 
 
-def load_ego_policy(checkpoint: Path, args, env, EgoPPOAdapter):
+def load_ego_policy(checkpoint: Path, args, env):
     if is_rarl_td3_checkpoint_name(checkpoint):
         from a.agents.rarl_td3_adapter import RARLTD3DiscreteAdapter
 
         return RARLTD3DiscreteAdapter(checkpoint, config_path=args.rarl_config, no_cuda=bool(args.no_cuda))
+    from a.agents.ego_ppo import EgoPPOAdapter
+
     ego = EgoPPOAdapter.from_config({"use_cuda": not args.no_cuda, "seed": args.torch_seed}, env.n_s, env.n_a)
     ego.load(str(checkpoint))
     return ego
+
+
+def runtime_imports():
+    from a.envs.factory import make_env
+    from a.training import eval_runtime as train_mod
+
+    return train_mod, make_env
 
 
 def parse_seed_list(value: str):
@@ -670,7 +679,7 @@ def main():
     selected = select_all_checkpoints(args)
     seeds = scenario_seeds(args)
     env_args = make_env_args(args)
-    train_mod, _MAPPOAgent, EgoPPOAdapter, make_env = finetune.runtime_imports()
+    train_mod, make_env = runtime_imports()
 
     if str(args.hdv_control_mode).lower() == "policy" and str(args.hdv_model).strip():
         hdv_path = finetune.latest_hdv_model(MODEL_ROOT / "results") if args.hdv_model == "latest" else Path(args.hdv_model)
@@ -719,7 +728,7 @@ def main():
                     if rows_for_model:
                         summary_rows.append(summarize_model_rows(rows_for_model))
                     continue
-            ego = load_ego_policy(checkpoint, args, env, EgoPPOAdapter)
+            ego = load_ego_policy(checkpoint, args, env)
             rows_for_model = []
             for seed in seeds:
                 metrics = finetune.run_eval_episode(env, None, ego, train_mod, env_args, int(seed))

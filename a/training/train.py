@@ -11,7 +11,6 @@ from datetime import datetime
 
 import numpy as np
 
-from a.agents.ego_ppo import EgoPPOAdapter
 from a.agents.mappo import MAPPOAgent
 from a.envs.action_adapter import DiscreteDrivingAction
 from a.envs.factory import make_env
@@ -217,6 +216,8 @@ def train_adversarial(args):
 def train_ego(args):
     """Train only the PPO ego policy with CatSafetyEgoReward."""
 
+    from a.agents.ego_ppo import EgoPPOAdapter
+
     output_dir = make_output_dir(args, prefix="ego")
     model_dir = args.model_dir or os.path.join(output_dir, "models", "ego")
     os.makedirs(model_dir, exist_ok=True)
@@ -369,6 +370,8 @@ def train_ego_phase_with_adv_buffer(
 
 
 def train_joint(args):
+    from a.agents.ego_ppo import EgoPPOAdapter
+
     if args.joint_strategy == "staged-pairs":
         stage_cycles = parse_stage_cycles(args.stage_cycles)
         if sum(stage_cycles) != int(args.rounds):
