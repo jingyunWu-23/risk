@@ -1,0 +1,2 @@
+model_group,model_label,checkpoint_step,episodes,Road completion_mean_var,Ego crash rate_mean_var,Traffic efficiency_mean_var,Ego reward_mean_var,Average reward_mean_var,Average speed_mean_var,Driven distance_mean_var,Overtake success rate_mean_var
+training_final,compare_3sv_latest,400000,40,0.7088 ± 0.0414,0.2000 ± 0.1600,0.3736 ± 0.0090,-3.2570 ± 70.1414,125.7155 ± 2176.3058,16.7806 ± 14.2975,140.3476 ± 1623.6387,0.2500 ± 0.1875
